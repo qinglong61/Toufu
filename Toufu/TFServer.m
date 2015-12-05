@@ -7,7 +7,6 @@
 //
 
 #import "TFServer.h"
-
 #import "TFConnection.h"
 
 #include <sys/socket.h>
@@ -151,8 +150,8 @@ static void TFServerAcceptCallBack(CFSocketRef socket, CFSocketCallBackType type
     CFRelease(source6);
     
     assert(self.port > 0 && self.port < 65536);
-    self.netService = [[NSNetService alloc] initWithDomain:@"local" type:@"_cocoaecho._tcp." name:@"" port:(int) self.port];
-    [self.netService publishWithOptions:0];
+//    self.netService = [[NSNetService alloc] initWithDomain:@"local" type:@"_cocoaecho._tcp." name:@"" port:(int) self.port];
+//    [self.netService publishWithOptions:0];
     
     return YES;
 }

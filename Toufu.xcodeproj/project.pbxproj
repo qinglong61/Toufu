@@ -10,6 +10,7 @@
 		18D12BD41C0AFCA6008F5216 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 18D12BD31C0AFCA6008F5216 /* main.m */; };
 		18D12BDC1C0AFD19008F5216 /* TFServer.m in Sources */ = {isa = PBXBuildFile; fileRef = 18D12BDB1C0AFD19008F5216 /* TFServer.m */; };
 		18D12BDF1C0AFDE5008F5216 /* TFConnection.m in Sources */ = {isa = PBXBuildFile; fileRef = 18D12BDE1C0AFDE5008F5216 /* TFConnection.m */; };
+		18E657971C133121000E9654 /* TFClient.m in Sources */ = {isa = PBXBuildFile; fileRef = 18E657961C133121000E9654 /* TFClient.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -31,6 +32,8 @@
 		18D12BDB1C0AFD19008F5216 /* TFServer.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TFServer.m; sourceTree = "<group>"; };
 		18D12BDD1C0AFDE5008F5216 /* TFConnection.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TFConnection.h; sourceTree = "<group>"; };
 		18D12BDE1C0AFDE5008F5216 /* TFConnection.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TFConnection.m; sourceTree = "<group>"; };
+		18E657951C133121000E9654 /* TFClient.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TFClient.h; sourceTree = "<group>"; };
+		18E657961C133121000E9654 /* TFClient.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TFClient.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -64,6 +67,8 @@
 			isa = PBXGroup;
 			children = (
 				18D12BD31C0AFCA6008F5216 /* main.m */,
+				18E657951C133121000E9654 /* TFClient.h */,
+				18E657961C133121000E9654 /* TFClient.m */,
 				18D12BDA1C0AFD19008F5216 /* TFServer.h */,
 				18D12BDB1C0AFD19008F5216 /* TFServer.m */,
 				18D12BDD1C0AFDE5008F5216 /* TFConnection.h */,
@@ -131,6 +136,7 @@
 			files = (
 				18D12BDC1C0AFD19008F5216 /* TFServer.m in Sources */,
 				18D12BDF1C0AFDE5008F5216 /* TFConnection.m in Sources */,
+				18E657971C133121000E9654 /* TFClient.m in Sources */,
 				18D12BD41C0AFCA6008F5216 /* main.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
