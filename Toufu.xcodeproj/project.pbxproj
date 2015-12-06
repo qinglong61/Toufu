@@ -226,6 +226,7 @@
 		18D12BD81C0AFCA6008F5216 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_WARN_NULLABLE_TO_NONNULL_CONVERSION = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -233,6 +234,7 @@
 		18D12BD91C0AFCA6008F5216 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_WARN_NULLABLE_TO_NONNULL_CONVERSION = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;

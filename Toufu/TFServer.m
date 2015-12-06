@@ -8,33 +8,31 @@
 
 #import "TFServer.h"
 #import "TFConnection.h"
+#import "TFClient.h"
 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
 
-@interface TFServer () <NSStreamDelegate>
+@interface TFServer () <TFConnectionDelegate>
 
-// read/write versions of public properties
+@property (nonatomic, assign) NSUInteger port;
+@property (nonatomic, assign) BOOL isProxy;
 
-@property (nonatomic, assign, readwrite) NSUInteger         port;
-
-// private properties
-
-@property (nonatomic, strong, readwrite) NSNetService *     netService;
-@property (nonatomic, strong, readonly ) NSMutableSet *     connections;    // of TFConnection
+@property (nonatomic, strong, readonly) NSMutableSet *connections;
+@property (nonatomic, strong) TFClient *client;
 
 @end
 
 @implementation TFServer {
-    CFSocketRef             _ipv4socket;
-    CFSocketRef             _ipv6socket;
+    CFSocketRef _ipv4socket;
+    CFSocketRef _ipv6socket;
 }
 
 @synthesize port = _port;
-
-@synthesize netService = _netService;
+@synthesize isProxy = _isProxy;
 @synthesize connections = _connections;
+@synthesize client = _client;
 
 - (id)init
 {
@@ -49,15 +47,6 @@
     [self stop];
 }
 
-- (void)TFConnectionDidCloseNotification:(NSNotification *)note
-{
-    TFConnection *connection = [note object];
-    assert([connection isKindOfClass:[TFConnection class]]);
-    [(NSNotificationCenter *)[NSNotificationCenter defaultCenter] removeObserver:self name:TFConnectionDidCloseNotification object:connection];
-    [self.connections removeObject:connection];
-    NSLog(@"Connection closed.");
-}
-
 - (void)acceptConnection:(CFSocketNativeHandle)nativeSocketHandle
 {
     CFReadStreamRef readStream = NULL;
@@ -67,10 +56,9 @@
         CFReadStreamSetProperty(readStream, kCFStreamPropertyShouldCloseNativeSocket, kCFBooleanTrue);
         CFWriteStreamSetProperty(writeStream, kCFStreamPropertyShouldCloseNativeSocket, kCFBooleanTrue);
         
-        TFConnection * connection = [[TFConnection alloc] initWithInputStream:(__bridge NSInputStream *)readStream outputStream:(__bridge NSOutputStream *)writeStream];
+        TFConnection *connection = [[TFConnection alloc] initWithInputStream:(__bridge NSInputStream *)readStream outputStream:(__bridge NSOutputStream *)writeStream delegate:self];
         [self.connections addObject:connection];
         [connection open];
-        [(NSNotificationCenter *)[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(TFConnectionDidCloseNotification:) name:TFConnectionDidCloseNotification object:connection];
         NSLog(@"Added connection.");
     } else {
         // On any failure, we need to destroy the CFSocketNativeHandle
@@ -82,8 +70,6 @@
 }
 
 // This function is called by CFSocket when a new connection comes in.
-// We gather the data we need, and then convert the function call to a method
-// invocation on EchoServer.
 static void TFServerAcceptCallBack(CFSocketRef socket, CFSocketCallBackType type, CFDataRef address, const void *data, void *info) {
     assert(type == kCFSocketAcceptCallBack);
     
@@ -94,8 +80,18 @@ static void TFServerAcceptCallBack(CFSocketRef socket, CFSocketCallBackType type
     [server acceptConnection:*(CFSocketNativeHandle *)data];
 }
 
-- (BOOL)startOnPort:(NSUInteger)port {
+- (BOOL)startOnPort:(NSUInteger)port proxy:(BOOL)isProxy
+{
     assert(_ipv4socket == NULL && _ipv6socket == NULL);       // don't call -start twice!
+    assert(port > 0 && port < 65536);
+    
+    self.port = port;
+    self.isProxy = isProxy;
+    
+    if (isProxy) {
+        TFClient *client = [[TFClient alloc] init];
+        self.client = client;
+    }
     
     CFSocketContext socketCtxt = {0, (__bridge void *) self, NULL, NULL, NULL};
     _ipv4socket = CFSocketCreate(kCFAllocatorDefault, AF_INET,  SOCK_STREAM, 0, kCFSocketAcceptCallBack, &TFServerAcceptCallBack, &socketCtxt);
@@ -110,7 +106,7 @@ static void TFServerAcceptCallBack(CFSocketRef socket, CFSocketCallBackType type
     (void) setsockopt(CFSocketGetNative(_ipv4socket), SOL_SOCKET, SO_REUSEADDR, (const void *) &yes, sizeof(yes));
     (void) setsockopt(CFSocketGetNative(_ipv6socket), SOL_SOCKET, SO_REUSEADDR, (const void *) &yes, sizeof(yes));
     
-    // Set up the IPv4 listening socket; port is 0, which will cause the kernel to choose a port for us.
+    // Set up the IPv4 listening socket;
     struct sockaddr_in addr4;
     memset(&addr4, 0, sizeof(addr4));
     addr4.sin_len = sizeof(addr4);
@@ -121,12 +117,6 @@ static void TFServerAcceptCallBack(CFSocketRef socket, CFSocketCallBackType type
         [self stop];
         return NO;
     }
-    
-    // Now that the IPv4 binding was successful, we get the port number
-    // -- we will need it for the IPv6 listening socket and for the NSNetService.
-    NSData *addr = (__bridge_transfer NSData *)CFSocketCopyAddress(_ipv4socket);
-    assert([addr length] == sizeof(struct sockaddr_in));
-    self.port = ntohs(((const struct sockaddr_in *)[addr bytes])->sin_port);
     
     // Set up the IPv6 listening socket.
     struct sockaddr_in6 addr6;
@@ -149,20 +139,15 @@ static void TFServerAcceptCallBack(CFSocketRef socket, CFSocketCallBackType type
     CFRunLoopAddSource(CFRunLoopGetCurrent(), source6, kCFRunLoopCommonModes);
     CFRelease(source6);
     
-    assert(self.port > 0 && self.port < 65536);
-//    self.netService = [[NSNetService alloc] initWithDomain:@"local" type:@"_cocoaecho._tcp." name:@"" port:(int) self.port];
-//    [self.netService publishWithOptions:0];
-    
     return YES;
 }
 
-- (void)stop {
-    [self.netService stop];
-    self.netService = nil;
+- (void)stop
+{
     // Closes all the open connections.  The TFConnectionDidCloseNotification notification will ensure
     // that the connection gets removed from the self.connections set.  To avoid mututation under iteration
     // problems, we make a copy of that set and iterate over the copy.
-    for (TFConnection * connection in [self.connections copy]) {
+    for (TFConnection *connection in [self.connections copy]) {
         [connection close];
     }
     if (_ipv4socket != NULL) {
@@ -174,6 +159,85 @@ static void TFServerAcceptCallBack(CFSocketRef socket, CFSocketCallBackType type
         CFSocketInvalidate(_ipv6socket);
         CFRelease(_ipv6socket);
         _ipv6socket = NULL;
+    }
+}
+
+#pragma mark - private
+
+void extractHostPortFromRequest(NSString *request, NSString **host, NSUInteger *port)
+{
+    for (NSString *header in [request componentsSeparatedByString:@"\r\n"]) {
+        if ([header hasPrefix:@"Host: "]) {
+            NSString *hostAndPort = [header substringFromIndex:@"Host: ".length];
+            NSArray *arr = [hostAndPort componentsSeparatedByString:@":"];
+            *host = arr[0];
+            if (arr.count == 2) {
+                *port = [arr[1] integerValue];   
+            }
+            return;
+        }
+    }
+}
+
+#pragma mark - TFConnectionDelegate
+
+- (void)connectionDidOpen:(TFConnection *)connection
+{
+    NSLog(@"Connection opened.");
+}
+
+- (void)connection:(TFConnection *)connection didReceiveData:(NSData *)data
+{
+    NSString *request = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    NSLog(@"request:\n%@", request);
+    
+    __block NSString *response = @"HTTP/1.1 200 OK\r\n\
+    Server: Toufu\r\n\
+    Connection: keep-alive\r\n\
+    Content-Type: text/html; charset=utf-8\r\n\
+    Content-Language: zh-CN,zh\r\n\
+    \r\n\
+    <html><body><h1>It works!</h1></body></html>";
+    
+    if (self.isProxy) {
+        
+        NSString *host;
+        NSUInteger port = 80;
+        extractHostPortFromRequest(request, &host, &port);
+        
+        if ([self.client connectToHost:host onPort:port]) {
+            [self.client sendRequest:data withResponseHandler:^(NSData *responseData) {
+                response = [[NSString alloc] initWithData:responseData encoding:NSUTF8StringEncoding];
+                NSLog(@"response:\n%@", response);
+                
+                NSUInteger numberOfBytes = [responseData length];
+                uint8_t outputBuffer[numberOfBytes];
+                [responseData getBytes:outputBuffer length:numberOfBytes];
+                
+                NSInteger actuallyWritten = [connection.outputStream write:outputBuffer maxLength:(NSUInteger)numberOfBytes];
+                NSLog(@"Echoed %zd bytes.", (ssize_t) actuallyWritten);
+                [connection close];
+            }];
+        }
+    } else {
+        NSUInteger numberOfBytes = [response lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+        uint8_t outputBuffer[numberOfBytes];
+        NSUInteger usedLength = 0;
+        NSRange range = NSMakeRange(0, [response length]);
+        [response getBytes:outputBuffer maxLength:numberOfBytes usedLength:&usedLength encoding:NSUTF8StringEncoding options:0 range:range remainingRange:NULL];
+        NSInteger actuallyWritten = [connection.outputStream write:outputBuffer maxLength:(NSUInteger)numberOfBytes];
+        NSLog(@"Echoed %zd bytes.", (ssize_t) actuallyWritten);
+        [connection close];
+    }
+}
+
+- (void)connectionDidClose:(TFConnection *)connection WithError:(NSError *)error
+{
+    [self.connections removeObject:connection];
+    if (error) {
+        NSLog(@"Connection closed with Error:\n%@", error);
+    } else {
+        NSLog(@"Connection closed.");
     }
 }
 

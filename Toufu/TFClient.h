@@ -11,9 +11,9 @@
 @interface TFClient : NSObject
 
 @property (nonatomic, strong, readonly) NSString *hostName;
-@property (nonatomic, assign, readonly) UInt32 port;
+@property (nonatomic, assign, readonly) NSUInteger port;
 
-- (BOOL)openStreamsToHost:(NSString *)hostname onPort:(UInt32)port;
-- (void)outputText:(NSString *)text;
+- (BOOL)connectToHost:(NSString *)hostName onPort:(NSUInteger)port;
+- (void)sendRequest:(NSData *)requestData withResponseHandler:(void (^)(NSData *responseData))handler;
 
 @end

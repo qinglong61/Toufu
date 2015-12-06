@@ -8,8 +8,6 @@
 
 #import "TFConnection.h"
 
-NSString * TFConnectionDidCloseNotification = @"TFConnectionDidCloseNotification";
-
 @interface TFConnection () <NSStreamDelegate>
 @end
 
@@ -17,18 +15,21 @@ NSString * TFConnectionDidCloseNotification = @"TFConnectionDidCloseNotification
 
 @synthesize inputStream  = _inputStream;
 @synthesize outputStream = _outputStream;
+@synthesize delegate = _delegate;
 
-- (id)initWithInputStream:(NSInputStream *)inputStream outputStream:(NSOutputStream *)outputStream
+- (id)initWithInputStream:(NSInputStream *)inputStream outputStream:(NSOutputStream *)outputStream delegate:(id<TFConnectionDelegate>)delegate
 {
     self = [super init];
     if (self != nil) {
         _inputStream = inputStream;
         _outputStream = outputStream;
+        _delegate = delegate;
     }
     return self;
 }
 
-- (BOOL)open {
+- (BOOL)open
+{
     [self.inputStream  setDelegate:self];
     [self.outputStream setDelegate:self];
     [self.inputStream  scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
@@ -38,58 +39,63 @@ NSString * TFConnectionDidCloseNotification = @"TFConnectionDidCloseNotification
     return YES;
 }
 
-- (void)close {
+- (void)close
+{
+    [self closeWithError:nil];
+}
+
+- (void)closeWithError:(NSError *)error
+{
+    if ([self.delegate respondsToSelector:@selector(connectionWillClose:WithError:)]) {
+        [self.delegate connectionWillClose:self WithError:error];
+    }
+    
     [self.inputStream  setDelegate:nil];
     [self.outputStream setDelegate:nil];
     [self.inputStream  close];
     [self.outputStream close];
     [self.inputStream  removeFromRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
     [self.outputStream removeFromRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
-    [(NSNotificationCenter *)[NSNotificationCenter defaultCenter] postNotificationName:TFConnectionDidCloseNotification object:self];
+
+    if ([self.delegate respondsToSelector:@selector(connectionDidClose:WithError:)]) {
+        [self.delegate connectionDidClose:self WithError:error];
+    }
 }
+
+#pragma mark - NSStreamDelegate
 
 - (void)stream:(NSStream *)aStream handleEvent:(NSStreamEvent)streamEvent {
     assert(aStream == self.inputStream || aStream == self.outputStream);
     
     switch(streamEvent) {
+        case NSStreamEventOpenCompleted: {
+            if ([self.delegate respondsToSelector:@selector(connectionDidOpen:)]) {
+                [self.delegate connectionDidOpen:self];
+            }
+        } break;
+        case NSStreamEventHasSpaceAvailable: {
+            if ([self.delegate respondsToSelector:@selector(connectionCanWrite:)]) {
+                [self.delegate connectionCanWrite:self];
+            }
+        } break;
         case NSStreamEventHasBytesAvailable: {
-            uint8_t inputBuffer[2048];
-            NSInteger actuallyRead = [self.inputStream read:(uint8_t *)inputBuffer maxLength:sizeof(inputBuffer)];
+            uint8_t buffer[2048];
+            NSInteger actuallyRead = [self.inputStream read:(uint8_t *)buffer maxLength:sizeof(buffer)];
             if (actuallyRead > 0) {
-                
-                NSString *request = [[NSString alloc] initWithBytes:inputBuffer length:actuallyRead encoding:NSUTF8StringEncoding];
-                NSLog(@"request:\n%@", request);
-                
-                NSString *response = @"HTTP/1.1 200 OK\n\
-                Server: Toufu\n\
-                Connection: keep-alive\n\
-                Content-Type: text/html; charset=utf-8\n\
-                Content-Language: zh-CN,zh\n\
-                \n\
-                <html><body><h1>It works!</h1></body></html>";
-                
-                NSUInteger numberOfBytes = [response lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
-                uint8_t outputBuffer[numberOfBytes];
-                NSUInteger usedLength = 0;
-                NSRange range = NSMakeRange(0, [response length]);
-                [response getBytes:outputBuffer maxLength:numberOfBytes usedLength:&usedLength encoding:NSUTF8StringEncoding options:0 range:range remainingRange:NULL];
-//                    NSLog(@"%@", [[NSString alloc] initWithBytes:outputBuffer length:numberOfBytes encoding:NSUTF8StringEncoding]);
-                
-                NSInteger actuallyWritten = [self.outputStream write:outputBuffer maxLength:(NSUInteger)numberOfBytes];
-                NSLog(@"Echoed %zd bytes.", (ssize_t) actuallyWritten);
-                [self close];
+                if ([self.delegate respondsToSelector:@selector(connection:didReceiveData:)]) {
+                    NSData *data = [[NSData alloc] initWithBytes:buffer length:actuallyRead];
+                    [self.delegate connection:self didReceiveData:data];
+                }
             } else {
                 // A non-positive value from -read:maxLength: indicates either end of file (0) or
                 // an error (-1).  In either case we just wait for the corresponding stream event
                 // to come through.
             }
-        } break;
+        }
         case NSStreamEventEndEncountered:
         case NSStreamEventErrorOccurred: {
-            [self close];
+            [self closeWithError:[aStream streamError]];
         } break;
-        case NSStreamEventHasSpaceAvailable:
-        case NSStreamEventOpenCompleted:
         default: {
             // do nothing
         } break;
