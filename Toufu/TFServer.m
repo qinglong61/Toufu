@@ -183,21 +183,21 @@ void extractHostPortFromRequest(NSString *request, NSString **host, NSUInteger *
 
 - (void)connectionDidOpen:(TFConnection *)connection
 {
-    NSLog(@"Connection opened.");
+    NSLog(@"server connection opened.");
 }
 
 - (void)connection:(TFConnection *)connection didReceiveData:(NSData *)data
 {
     NSString *request = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-    NSLog(@"request:\n%@", request);
+    NSLog(@"server received request:\n%@", request);
     
     __block NSString *response = @"HTTP/1.1 200 OK\r\n\
-    Server: Toufu\r\n\
-    Connection: keep-alive\r\n\
-    Content-Type: text/html; charset=utf-8\r\n\
-    Content-Language: zh-CN,zh\r\n\
-    \r\n\
-    <html><body><h1>It works!</h1></body></html>";
+Server: Toufu\r\n\
+Connection: keep-alive\r\n\
+Content-Type: text/html; charset=utf-8\r\n\
+Content-Language: zh-CN,zh\r\n\
+\r\n\
+<html><body><h1>This is Toufu!</h1></body></html>\r\n";
     
     if (self.isProxy) {
         
@@ -207,37 +207,36 @@ void extractHostPortFromRequest(NSString *request, NSString **host, NSUInteger *
         
         if ([self.client connectToHost:host onPort:port]) {
             [self.client sendRequest:data withResponseHandler:^(NSData *responseData) {
-                response = [[NSString alloc] initWithData:responseData encoding:NSUTF8StringEncoding];
-                NSLog(@"response:\n%@", response);
                 
                 NSUInteger numberOfBytes = [responseData length];
                 uint8_t outputBuffer[numberOfBytes];
                 [responseData getBytes:outputBuffer length:numberOfBytes];
                 
                 NSInteger actuallyWritten = [connection.outputStream write:outputBuffer maxLength:(NSUInteger)numberOfBytes];
-                NSLog(@"Echoed %zd bytes.", (ssize_t) actuallyWritten);
+                NSLog(@"server responsed %zd bytes.", (ssize_t) actuallyWritten);
                 [connection close];
             }];
         }
     } else {
-        NSUInteger numberOfBytes = [response lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
-        uint8_t outputBuffer[numberOfBytes];
-        NSUInteger usedLength = 0;
-        NSRange range = NSMakeRange(0, [response length]);
-        [response getBytes:outputBuffer maxLength:numberOfBytes usedLength:&usedLength encoding:NSUTF8StringEncoding options:0 range:range remainingRange:NULL];
-        NSInteger actuallyWritten = [connection.outputStream write:outputBuffer maxLength:(NSUInteger)numberOfBytes];
-        NSLog(@"Echoed %zd bytes.", (ssize_t) actuallyWritten);
+        const uint8_t *buffer = [[response dataUsingEncoding:NSUTF8StringEncoding] bytes];
+        NSInteger actuallyWritten = [connection.outputStream write:buffer maxLength:response.length];
+        NSLog(@"server responsed %zd bytes.", (ssize_t) actuallyWritten);
         [connection close];
     }
+}
+
+- (void)connectionCanWrite:(TFConnection *)connection
+{
+
 }
 
 - (void)connectionDidClose:(TFConnection *)connection WithError:(NSError *)error
 {
     [self.connections removeObject:connection];
     if (error) {
-        NSLog(@"Connection closed with Error:\n%@", error);
+        NSLog(@"server connection closed with Error:\n%@", error);
     } else {
-        NSLog(@"Connection closed.");
+        NSLog(@"server connection closed.");
     }
 }
 

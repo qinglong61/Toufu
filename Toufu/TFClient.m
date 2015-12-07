@@ -102,7 +102,7 @@
 
 - (void)connectionDidOpen:(TFConnection *)connection
 {
-    NSLog(@"Connection opened.");
+    NSLog(@"client connection opened.");
 }
 
 - (void)connectionCanWrite:(TFConnection *)connection
@@ -118,7 +118,7 @@
     // If the input buffer ends with CR LF, show it to the user.
 //    if ([self.inputBuffer length] >= 2 && memcmp((const char *) [self.inputBuffer bytes] + [self.inputBuffer length] - 2, "\r\n", 2) == 0) {
         NSString *string = [[NSString alloc] initWithData:self.inputBuffer encoding:NSUTF8StringEncoding]?:@"response not UTF-8";
-        NSLog(@"%@", string);
+        NSLog(@"client received response:\n%@", string);
         if (self.responseHandler) {
             self.responseHandler(self.inputBuffer);
         }
@@ -130,9 +130,9 @@
 {
     self.connection = nil;
     if (error) {
-        NSLog(@"Connection closed with Error:\n%@", error);
+        NSLog(@"client connection closed with Error:\n%@", error);
     } else {
-        NSLog(@"Connection closed.");
+        NSLog(@"client connection closed.");
     }
 }
 

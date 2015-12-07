@@ -11,7 +11,7 @@
 int main(int argc, const char * argv[]) {
     @autoreleasepool {
         TFServer *server = [[TFServer alloc] init];
-        if ([server startOnPort:8989 proxy:YES]) {
+        if ([server startOnPort:8989 proxy:NO]) {
             NSLog(@"Started server on port %zu.", (size_t)[server port]);
             [[NSRunLoop currentRunLoop] run];
         } else {

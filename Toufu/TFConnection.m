@@ -64,41 +64,44 @@
 
 #pragma mark - NSStreamDelegate
 
-- (void)stream:(NSStream *)aStream handleEvent:(NSStreamEvent)streamEvent {
-    assert(aStream == self.inputStream || aStream == self.outputStream);
-    
-    switch(streamEvent) {
-        case NSStreamEventOpenCompleted: {
-            if ([self.delegate respondsToSelector:@selector(connectionDidOpen:)]) {
-                [self.delegate connectionDidOpen:self];
-            }
-        } break;
-        case NSStreamEventHasSpaceAvailable: {
-            if ([self.delegate respondsToSelector:@selector(connectionCanWrite:)]) {
-                [self.delegate connectionCanWrite:self];
-            }
-        } break;
-        case NSStreamEventHasBytesAvailable: {
-            uint8_t buffer[2048];
-            NSInteger actuallyRead = [self.inputStream read:(uint8_t *)buffer maxLength:sizeof(buffer)];
-            if (actuallyRead > 0) {
-                if ([self.delegate respondsToSelector:@selector(connection:didReceiveData:)]) {
-                    NSData *data = [[NSData alloc] initWithBytes:buffer length:actuallyRead];
-                    [self.delegate connection:self didReceiveData:data];
+- (void)stream:(NSStream *)aStream handleEvent:(NSStreamEvent)streamEvent
+{
+    if (aStream == self.inputStream || aStream == self.outputStream) {
+        switch(streamEvent) {
+            case NSStreamEventOpenCompleted: {
+                if ([self.delegate respondsToSelector:@selector(connectionDidOpen:)]) {
+                    [self.delegate connectionDidOpen:self];
                 }
-            } else {
-                // A non-positive value from -read:maxLength: indicates either end of file (0) or
-                // an error (-1).  In either case we just wait for the corresponding stream event
-                // to come through.
-            }
+            } break;
+            case NSStreamEventHasSpaceAvailable: {
+                if ([self.delegate respondsToSelector:@selector(connectionCanWrite:)]) {
+                    [self.delegate connectionCanWrite:self];
+                }
+            } break;
+            case NSStreamEventHasBytesAvailable: {
+                uint8_t buffer[2048];
+                NSInteger actuallyRead = [self.inputStream read:(uint8_t *)buffer maxLength:sizeof(buffer)];
+                if (actuallyRead > 0) {
+                    if ([self.delegate respondsToSelector:@selector(connection:didReceiveData:)]) {
+                        NSData *data = [[NSData alloc] initWithBytes:buffer length:actuallyRead];
+                        [self.delegate connection:self didReceiveData:data];
+                    }
+                } else {
+                    // A non-positive value from -read:maxLength: indicates either end of file (0) or
+                    // an error (-1).  In either case we just wait for the corresponding stream event
+                    // to come through.
+                }
+            } break;
+            case NSStreamEventEndEncountered:
+            case NSStreamEventErrorOccurred: {
+                if (aStream.streamStatus != NSStreamStatusClosed && aStream.streamStatus != NSStreamStatusNotOpen) {
+                    [self closeWithError:[aStream streamError]];
+                }
+            } break;
+            default: {
+                // do nothing
+            } break;
         }
-        case NSStreamEventEndEncountered:
-        case NSStreamEventErrorOccurred: {
-            [self closeWithError:[aStream streamError]];
-        } break;
-        default: {
-            // do nothing
-        } break;
     }
 }
 
